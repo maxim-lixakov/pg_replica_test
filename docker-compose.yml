@@ -1,0 +1,40 @@
+version: '3.8'
+
+services:
+  master:
+    image: postgres:13
+    container_name: master-db
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+    volumes:
+      - master-data:/var/lib/postgresql/data
+      - ./master/postgresql.conf:/etc/postgresql/postgresql.conf
+      - ./master/pg_hba.conf:/etc/postgresql/pg_hba.conf
+    ports:
+      - "5432:5432"
+    command: postgres -c 'config_file=/etc/postgresql/postgresql.conf'
+
+  replica:
+    image: postgres:13
+    container_name: replica-db
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+    volumes:
+      - replica-data:/var/lib/postgresql/data
+    depends_on:
+      - master
+    ports:
+      - "5433:5432"
+    command: >
+      bash -c "rm -rf /var/lib/postgresql/data/* &&
+               until pg_basebackup -h master-db -D /var/lib/postgresql/data -U postgres -vP -w; do sleep 1; done &&
+               echo \"primary_conninfo = 'host=master-db port=5432 user=postgres password=password'\" >> /var/lib/postgresql/data/postgresql.auto.conf &&
+               exec postgres"
+
+volumes:
+  master-data:
+  replica-data:
